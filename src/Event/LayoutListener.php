@@ -20,11 +20,11 @@ use DateTime,
     Zend\ServiceManager\ServiceLocatorInterface,
     Zend\Stdlib\AbstractOptions,
     Zend\View\Renderer\PhpRenderer,
+    Zend\View\Helper\HeadScript,
+    Zend\View\Helper\HeadStyle,
     Zend\View\ViewEvent,
     CmsCommon\Stdlib\ArrayUtils,
     CmsCommon\Stdlib\DateTimeUtils;
-use Zend\View\Helper\HeadScript;
-use Zend\View\Helper\HeadStyle;
 
 /**
  * Layout event listener
