@@ -59,6 +59,9 @@ return [
         ],
     ],
     'view_manager' => [
+        'template_map' => [
+            'layout/wrapper' => __DIR__ . '/../view/wrapper.phtml',
+        ],
         'template_path_stack' => [
             'CmsLayout' => __DIR__ . '/../view',
         ],

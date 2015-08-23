@@ -30,6 +30,16 @@ class ModuleOptions extends AbstractOptions implements ModuleOptionsInterface
     /**
      * @var string
      */
+    protected $wrapper;
+
+    /**
+     * @var string
+     */
+    protected $wrapperCaptureTo = 'content';
+
+    /**
+     * @var string
+     */
     protected $template;
 
     /**
@@ -107,6 +117,40 @@ class ModuleOptions extends AbstractOptions implements ModuleOptionsInterface
     public function getNamespace()
     {
         return $this->namespace;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setWrapper($wrapper)
+    {
+        $this->wrapper = (string) $wrapper;
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getWrapper()
+    {
+        return $this->wrapper;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function setWrapperCaptureTo($param)
+    {
+        $this->wrapperCaptureTo = (string) $param;
+        return $this;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getWrapperCaptureTo()
+    {
+        return $this->wrapperCaptureTo;
     }
 
     /**

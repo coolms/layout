@@ -24,6 +24,28 @@ interface ModuleOptionsInterface
     public function getNamespace();
 
     /**
+     * @param string $wrapper
+     * @return self
+     */
+    public function setWrapper($wrapper);
+
+    /**
+     * @return string
+     */
+    public function getWrapper();
+
+    /**
+     * @param string $param
+     * @return self
+     */
+    public function setWrapperCaptureTo($param);
+
+    /**
+     * @return string
+     */
+    public function getWrapperCaptureTo();
+
+    /**
      * @param string $template
      * @return self
      */

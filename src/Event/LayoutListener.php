@@ -25,6 +25,7 @@ use DateTime,
     Zend\View\ViewEvent,
     CmsCommon\Stdlib\ArrayUtils,
     CmsCommon\Stdlib\DateTimeUtils;
+use Zend\View\Model\ViewModel;
 
 /**
  * Layout event listener
@@ -37,6 +38,11 @@ class LayoutListener extends AbstractListenerAggregate
     const ACTION_PREPEND    = 'PREPEND';
     const ACTION_SET        = 'SET';
     const ACTION_DEFAULT    = self::ACTION_APPEND;
+
+    /**
+     * @var bool
+     */
+    private $enabled = true;
 
     /**
      * @var FilterInterface
@@ -110,6 +116,10 @@ class LayoutListener extends AbstractListenerAggregate
 
                 $shareManager->attach('Zend\\View\\View', ViewEvent::EVENT_RENDERER_POST,
                     function ($e) use ($config, $layout) {
+                        if (!$this->enabled) {
+                            return;
+                        }
+
                         if ($e->getModel() === $layout && $e->getRenderer() instanceof PhpRenderer) {
                             foreach ($config->toArray() as $name => $value) {
                                 if ($value) {
@@ -119,12 +129,31 @@ class LayoutListener extends AbstractListenerAggregate
                                     }
                                 }
                             }
+
+                            if ($config->getWrapper()) {
+                                $wrapper = new ViewModel();
+                                $wrapper->setTemplate($config->getWrapper());
+                                $wrapper->addChild($layout, $config->getWrapperCaptureTo());
+                                $e->setModel($wrapper);
+                            }
+
+                            $this->setEnabled(false);
                         }
                     }
                 );
             },
             100
         );
+    }
+
+    /**
+     * @param bool $flag
+     * @return self
+     */
+    public function setEnabled($flag)
+    {
+        $this->enabled = (bool) $flag;
+        return $this;
     }
 
     /**
