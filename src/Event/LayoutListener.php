@@ -69,7 +69,7 @@ class LayoutListener extends AbstractListenerAggregate
         $shareManager->attach('Zend\\Mvc\\Controller\\AbstractController', 'dispatch',
             function($e) use ($shareManager) {
                 $routeMatch = $e->getRouteMatch();
-                $services = $e->getApplication()->getServiceManager();
+                $services   = $e->getApplication()->getServiceManager();
 
                 /* @var $config \CmsLayout\Options\ModuleOptionsInterface */
                 $config     = $services->get('CmsLayout\\Options\\ModuleOptions');
