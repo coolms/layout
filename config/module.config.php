@@ -21,7 +21,7 @@ return [
         ],
     ],
     'listeners' => [
-        'CmsLayout\Event\LayoutListener' => 'CmsLayout\Event\LayoutListener',
+        'CmsLayout\Listener\LayoutListener' => 'CmsLayout\Listener\LayoutListener',
     ],
     'router' => [
         'routes' => [
@@ -55,7 +55,7 @@ return [
             'CmsLayout\Options\ModuleOptions' => 'CmsLayout\Factory\ModuleOptionsFactory',
         ],
         'invokables' => [
-            'CmsLayout\Event\LayoutListener' => 'CmsLayout\Event\LayoutListener',
+            'CmsLayout\Listener\LayoutListener' => 'CmsLayout\Listener\LayoutListener',
         ],
     ],
     'view_manager' => [

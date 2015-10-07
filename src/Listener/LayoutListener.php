@@ -8,13 +8,14 @@
  * @author    Dmitry Popov <d.popov@altgraphic.com>
  */
 
-namespace CmsLayout\Event;
+namespace CmsLayout\Listener;
 
 use DateTime,
     Zend\EventManager\AbstractListenerAggregate,
     Zend\EventManager\EventManagerInterface,
     Zend\Filter\FilterChain,
     Zend\Filter\FilterInterface,
+    Zend\Mvc\Controller\AbstractController,
     Zend\Mvc\ModuleRouteListener,
     Zend\Mvc\MvcEvent,
     Zend\ServiceManager\ServiceLocatorInterface,
@@ -22,10 +23,11 @@ use DateTime,
     Zend\View\Renderer\PhpRenderer,
     Zend\View\Helper\HeadScript,
     Zend\View\Helper\HeadStyle,
+    Zend\View\Model\ViewModel,
     Zend\View\ViewEvent,
     CmsCommon\Stdlib\ArrayUtils,
-    CmsCommon\Stdlib\DateTimeUtils;
-use Zend\View\Model\ViewModel;
+    CmsCommon\Stdlib\DateTimeUtils,
+    CmsLayout\Options\ModuleOptions;
 
 /**
  * Layout event listener
@@ -55,6 +57,7 @@ class LayoutListener extends AbstractListenerAggregate
     public function attach(EventManagerInterface $events)
     {
         $this->listeners[] = $events->attach(MvcEvent::EVENT_BOOTSTRAP, [$this, 'onBootstrap'], 1000);
+        $this->listeners[] = $events->attach(MvcEvent::EVENT_DISPATCH_ERROR, [$this, 'onDispatch']);
     }
 
     /**
@@ -65,84 +68,99 @@ class LayoutListener extends AbstractListenerAggregate
      */
     public function onBootstrap(MvcEvent $e)
     {
-        $shareManager = $e->getApplication()->getEventManager()->getSharedManager();
-        $shareManager->attach('Zend\\Mvc\\Controller\\AbstractController', 'dispatch',
-            function($e) use ($shareManager) {
-                $routeMatch = $e->getRouteMatch();
-                $services   = $e->getApplication()->getServiceManager();
-
-                /* @var $config \CmsLayout\Options\ModuleOptionsInterface */
-                $config     = $services->get('CmsLayout\\Options\\ModuleOptions');
-                $layouts    = $config->getLayouts();
-
-                $controller = $e->getTarget();
-                $layout     = $controller->layout();
-
-                $moduleNamespace = $routeMatch->getParam(
-                    ModuleRouteListener::MODULE_NAMESPACE,
-                    $routeMatch->getParam('controller')
-                );
-
-                $module = strstr($moduleNamespace, '\\', true);
-                if (isset($layouts[$module]) && $this->isValid($layouts[$module])) {
-                    $config->setFromArray($this->normalizeOptions($layouts[$module]));
-                }
-
-                $className = get_class($controller);
-                if (isset($layouts[$className]) && $this->isValid($layouts[$className])) {
-                    $config->setFromArray($this->normalizeOptions($layouts[$controllerClass]));
-                }
-
-                $routeName = trim($e->getRouteMatch()->getMatchedRouteName(), '/');
-                $routeToken = strtok($routeName, '/');
-                while (false !== $routeToken) {
-                    $routeTokens[] = $routeToken;
-                    $routeName = implode('/', $routeTokens);
-                    if (isset($layouts[$routeName]) && $this->isValid($layouts[$routeName])) {
-                        $config->setFromArray($this->normalizeOptions($layouts[$routeName]));
-                    }
-
-                    $routeToken = strtok('/');
-                }
-
-                if ($options = $config->getModuleOptions()) {
-                    $this->loadLayoutModuleOptions($options, $services);
-                }
-
-                $layout->setOption('namespace', $config->getNamespace() ?: $module);
-                if ($template = $config->getTemplate()) {
-                    $layout->setTemplate($template);
-                }
-
-                $shareManager->attach('Zend\\View\\View', ViewEvent::EVENT_RENDERER_POST,
-                    function ($e) use ($config, $layout) {
-                        if (!$this->enabled) {
-                            return;
-                        }
-
-                        if ($e->getModel() === $layout && $e->getRenderer() instanceof PhpRenderer) {
-                            foreach ($config->toArray() as $name => $value) {
-                                if ($value) {
-                                    $methodName = $this->normalizeMethodName('setup' . $name);
-                                    if (method_exists($this, $methodName)) {
-                                        $this->$methodName($e, $value);
-                                    }
-                                }
-                            }
-
-                            if ($config->getWrapper()) {
-                                $wrapper = new ViewModel();
-                                $wrapper->setTemplate($config->getWrapper());
-                                $wrapper->addChild($layout, $config->getWrapperCaptureTo());
-                                $e->setModel($wrapper);
-                            }
-
-                            $this->setEnabled(false);
-                        }
-                    }
-                );
-            },
+        $e->getApplication()->getEventManager()->getSharedManager()->attach(
+            AbstractController::class,
+            'dispatch',
+            [$this, 'onDispatch'],
             100
+        );
+    }
+
+    /**
+     * Event callback to be triggered on dispatch/dispatch.error
+     *
+     * @param MvcEvent $e
+     * @return void
+     */
+    public function onDispatch(MvcEvent $e)
+    {
+        $routeMatch = $e->getRouteMatch();
+        $services   = $e->getApplication()->getServiceManager();
+
+        /* @var $config \CmsLayout\Options\ModuleOptionsInterface */
+        $config     = $services->get(ModuleOptions::class);
+        $layouts    = $config->getLayouts();
+
+        $target = $e->getTarget();
+        if ($target instanceof AbstractController) {
+            $layout = $target->layout();
+        } else {
+            $layout = $e->getViewModel();
+        }
+
+        $moduleNamespace = $routeMatch->getParam(
+            ModuleRouteListener::MODULE_NAMESPACE,
+            $routeMatch->getParam('controller')
+        );
+
+        $module = strstr($moduleNamespace, '\\', true);
+        if (isset($layouts[$module]) && $this->isValid($layouts[$module])) {
+            $config->setFromArray($this->normalizeOptions($layouts[$module]));
+        }
+
+        $className = $routeMatch->getParam('controller');
+        if (isset($layouts[$className]) && $this->isValid($layouts[$className])) {
+            $config->setFromArray($this->normalizeOptions($layouts[$controllerClass]));
+        }
+
+        $routeName = trim($e->getRouteMatch()->getMatchedRouteName(), '/');
+        $routeToken = strtok($routeName, '/');
+        while (false !== $routeToken) {
+            $routeTokens[] = $routeToken;
+            $routeName = implode('/', $routeTokens);
+            if (isset($layouts[$routeName]) && $this->isValid($layouts[$routeName])) {
+                $config->setFromArray($this->normalizeOptions($layouts[$routeName]));
+            }
+
+            $routeToken = strtok('/');
+        }
+
+        if ($options = $config->getModuleOptions()) {
+            $this->loadLayoutModuleOptions($options, $services);
+        }
+
+        $layout->setOption('namespace', $config->getNamespace() ?: $module);
+        if ($template = $config->getTemplate()) {
+            $layout->setTemplate($template);
+        }
+
+        $shareManager = $e->getApplication()->getEventManager()->getSharedManager();
+        $shareManager->attach('Zend\\View\\View', ViewEvent::EVENT_RENDERER_POST,
+            function ($e) use ($config, $layout) {
+                if (!$this->enabled) {
+                    return;
+                }
+
+                if ($e->getModel() === $layout && $e->getRenderer() instanceof PhpRenderer) {
+                    foreach ($config->toArray() as $name => $value) {
+                        if ($value) {
+                            $methodName = $this->normalizeMethodName('setup' . $name);
+                            if (method_exists($this, $methodName)) {
+                                $this->$methodName($e, $value);
+                            }
+                        }
+                    }
+
+                    if ($config->getWrapper()) {
+                        $wrapper = new ViewModel();
+                        $wrapper->setTemplate($config->getWrapper());
+                        $wrapper->addChild($layout, $config->getWrapperCaptureTo());
+                        $e->setModel($wrapper);
+                    }
+
+                    $this->setEnabled(false);
+                }
+            }
         );
     }
 
@@ -275,6 +293,7 @@ class LayoutListener extends AbstractListenerAggregate
     /**
      * @param ViewEvent $e
      * @param array $links
+     * @throws Exception\RuntimeException
      * @return self
      */
     protected function setupHeadLinks(ViewEvent $e, array $links)
@@ -289,7 +308,7 @@ class LayoutListener extends AbstractListenerAggregate
 
             if (!isset($link['href'])) {
                 if (!isset($link['extras']['href'])) {
-                    throw new \RuntimeException('"href" attribute is required for link tag');
+                    throw new Exception\RuntimeException('"href" attribute is required for link tag');
                 }
 
                 $link['href'] = $link['extras']['href'];

@@ -8,14 +8,14 @@
  * @author    Dmitry Popov <d.popov@altgraphic.com>
  */
 
-namespace CmsLayout\Event\Exception;
+namespace CmsLayout\Listener\Exception;
 
-use CmsLayout\Exception\InvalidArgumentException as BaseInvalidArgumentException;
+use CmsLayout\Exception\RuntimeException as BaseRuntimeException;
 
 /**
- * Invalid argument exception for CmsLayout\Event
+ * Runtime exception for CmsLayout\Event
  */
-class InvalidArgumentException extends BaseInvalidArgumentException
+class RuntimeException extends BaseRuntimeException
 {
     
 }
