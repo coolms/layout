@@ -84,12 +84,15 @@ class LayoutListener extends AbstractListenerAggregate
      */
     public function onDispatch(MvcEvent $e)
     {
-        $routeMatch = $e->getRouteMatch();
-        $services   = $e->getApplication()->getServiceManager();
+        if (!($routeMatch = $e->getRouteMatch())) {
+            return;
+        }
+
+        $services = $e->getApplication()->getServiceManager();
 
         /* @var $config \CmsLayout\Options\ModuleOptionsInterface */
-        $config     = $services->get(ModuleOptions::class);
-        $layouts    = $config->getLayouts();
+        $config = $services->get(ModuleOptions::class);
+        $layouts = $config->getLayouts();
 
         $target = $e->getTarget();
         if ($target instanceof AbstractController) {
