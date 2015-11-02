@@ -225,7 +225,7 @@ class LayoutListener extends AbstractListenerAggregate
     /**
      * @param ViewEvent $e
      * @param array $titles
-     * @return self
+     * @return void
      */
     protected function setupHeadTitles(ViewEvent $e, array $titles)
     {
@@ -233,14 +233,12 @@ class LayoutListener extends AbstractListenerAggregate
         foreach ($titles as $title) {
             $plugin($title);
         }
-
-        return $this;
     }
 
     /**
      * @param ViewEvent $e
      * @param array $options
-     * @return self
+     * @return void
      */
     protected function setupHeadTitleOptions(ViewEvent $e, array $options)
     {
@@ -256,14 +254,12 @@ class LayoutListener extends AbstractListenerAggregate
                 $plugin->{$methodName}($value);
             }
         }
-
-        return $this;
     }
 
     /**
      * @param ViewEvent $e
      * @param array $meta
-     * @return self
+     * @return void
      */
     protected function setupHeadMeta(ViewEvent $e, array $meta)
     {
@@ -304,15 +300,13 @@ class LayoutListener extends AbstractListenerAggregate
 
             $plugin($content, $keyValue, $keyType, $modifiers);
         }
-
-        return $this;
     }
 
     /**
      * @param ViewEvent $e
      * @param array $links
      * @throws Exception\RuntimeException
-     * @return self
+     * @return void
      */
     protected function setupHeadLinks(ViewEvent $e, array $links)
     {
@@ -393,7 +387,8 @@ class LayoutListener extends AbstractListenerAggregate
     /**
      * @param ViewEvent $e
      * @param array $scripts
-     * @return self
+     * @param string $plugin
+     * @return void
      */
     protected function setupHeadScripts(ViewEvent $e, array $scripts, $plugin = 'headScript')
     {
@@ -442,24 +437,22 @@ class LayoutListener extends AbstractListenerAggregate
                 $type
             );
         }
-
-        return $this;
     }
 
     /**
      * @param ViewEvent $e
      * @param array $scripts
-     * @return self
+     * @return void
      */
     protected function setupInlineScripts(ViewEvent $e, array $scripts)
     {
-        return $this->setupHeadScripts($e, $scripts, 'inlineScript');
+        $this->setupHeadScripts($e, $scripts, 'inlineScript');
     }
 
     /**
      * @param ViewEvent $e
      * @param array $styles
-     * @return self
+     * @return void
      */
     protected function setupHeadStyles(ViewEvent $e, array $styles)
     {
