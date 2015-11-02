@@ -24,10 +24,12 @@ use DateTime,
     Zend\View\Helper\HeadScript,
     Zend\View\Helper\HeadStyle,
     Zend\View\Model\ViewModel,
+    Zend\View\View,
     Zend\View\ViewEvent,
     CmsCommon\Stdlib\ArrayUtils,
     CmsCommon\Stdlib\DateTimeUtils,
-    CmsLayout\Options\ModuleOptions;
+    CmsLayout\Options\ModuleOptions,
+    CmsLayout\Options\ModuleOptionsInterface;
 
 /**
  * Layout event listener
@@ -56,57 +58,31 @@ class LayoutListener extends AbstractListenerAggregate
      */
     public function attach(EventManagerInterface $events)
     {
-        $this->listeners[] = $events->attach(MvcEvent::EVENT_BOOTSTRAP, [$this, 'onBootstrap'], 1000);
-        $this->listeners[] = $events->attach(MvcEvent::EVENT_DISPATCH_ERROR, [$this, 'onDispatch']);
+        $this->listeners[] = $events->attach(MvcEvent::EVENT_DISPATCH, [$this, 'onDispatch']);
+        $this->listeners[] = $events->attach(MvcEvent::EVENT_DISPATCH_ERROR, [$this, 'onDispatchError']);
     }
 
     /**
-     * Event callback to be triggered on bootstrap
-     *
-     * @param MvcEvent $e
-     * @return void
-     */
-    public function onBootstrap(MvcEvent $e)
-    {
-        $e->getApplication()->getEventManager()->getSharedManager()->attach(
-            AbstractController::class,
-            'dispatch',
-            [$this, 'onDispatch'],
-            100
-        );
-    }
-
-    /**
-     * Event callback to be triggered on dispatch/dispatch.error
+     * Event callback to be triggered on dispatch
      *
      * @param MvcEvent $e
      * @return void
      */
     public function onDispatch(MvcEvent $e)
     {
-        if (!($routeMatch = $e->getRouteMatch())) {
-            return;
-        }
-
         $services = $e->getApplication()->getServiceManager();
-
-        /* @var $config \CmsLayout\Options\ModuleOptionsInterface */
+        /* @var $config ModuleOptionsInterface */
         $config = $services->get(ModuleOptions::class);
-        $layouts = $config->getLayouts();
 
-        $target = $e->getTarget();
-        if ($target instanceof AbstractController) {
-            $layout = $target->layout();
-        } else {
-            $layout = $e->getViewModel();
-        }
-
+        $routeMatch = $e->getRouteMatch();
         $moduleNamespace = $routeMatch->getParam(
             ModuleRouteListener::MODULE_NAMESPACE,
             $routeMatch->getParam('controller')
         );
 
+        $layouts = $config->getLayouts();
         $module = strstr($moduleNamespace, '\\', true);
+
         if (isset($layouts[$module]) && $this->isValid($layouts[$module])) {
             $config->setFromArray($this->normalizeOptions($layouts[$module]));
         }
@@ -132,39 +108,78 @@ class LayoutListener extends AbstractListenerAggregate
             $this->loadLayoutModuleOptions($options, $services);
         }
 
-        $layout->setOption('namespace', $config->getNamespace() ?: $module);
+        if (!$config->getNamespace()) {
+            $config->setNamespace($module);
+        }
+
+        $e->getApplication()->getEventManager()->getSharedManager()->attach(
+            View::class,
+            ViewEvent::EVENT_RENDERER_POST,
+            function ($e) use ($config) {
+                $this->onViewRendererPost($e, $config);
+            }
+        );
+    }
+
+    /**
+     * Event callback to be triggered on dispatch.error
+     *
+     * @param MvcEvent $e
+     * @return void
+     */
+    public function onDispatchError(MvcEvent $e)
+    {
+        $services = $e->getApplication()->getServiceManager();
+        /* @var $config \CmsLayout\Options\ModuleOptionsInterface */
+        $config = $services->get(ModuleOptions::class);
+
+        $e->getApplication()->getEventManager()->getSharedManager()->attach(
+            View::class,
+            ViewEvent::EVENT_RENDERER_POST,
+            function ($e) use ($config) {
+                $this->onViewRendererPost($e, $config);
+            }
+        );
+    }
+
+    /**
+     * @param ViewEvent $e
+     * @param ModuleOptionsInterface $config
+     * @return void
+     */
+    protected function onViewRendererPost(ViewEvent $e, ModuleOptionsInterface $config)
+    {
+        if (!$this->enabled || !$e->getRenderer() instanceof PhpRenderer) {
+            return;
+        }
+
+        $layout = $e->getModel();
+
+        if ($namespace = $config->getNamespace()) {
+            $layout->setOption('namespace', $namespace);
+        }
+
         if ($template = $config->getTemplate()) {
             $layout->setTemplate($template);
         }
 
-        $shareManager = $e->getApplication()->getEventManager()->getSharedManager();
-        $shareManager->attach('Zend\\View\\View', ViewEvent::EVENT_RENDERER_POST,
-            function ($e) use ($config, $layout) {
-                if (!$this->enabled) {
-                    return;
-                }
+        foreach ($config->toArray() as $name => $value) {
+            if (!$value) continue;
 
-                if ($e->getModel() === $layout && $e->getRenderer() instanceof PhpRenderer) {
-                    foreach ($config->toArray() as $name => $value) {
-                        if ($value) {
-                            $methodName = $this->normalizeMethodName('setup' . $name);
-                            if (method_exists($this, $methodName)) {
-                                $this->$methodName($e, $value);
-                            }
-                        }
-                    }
-
-                    if ($config->getWrapper()) {
-                        $wrapper = new ViewModel();
-                        $wrapper->setTemplate($config->getWrapper());
-                        $wrapper->addChild($layout, $config->getWrapperCaptureTo());
-                        $e->setModel($wrapper);
-                    }
-
-                    $this->setEnabled(false);
-                }
+            $methodName = $this->normalizeMethodName("setup$name");
+            if (method_exists($this, $methodName)) {
+                $this->$methodName($e, $value);
             }
-        );
+        }
+
+        if ($config->getWrapper()) {
+            $wrapper = new ViewModel();
+            $wrapper->setTemplate($config->getWrapper());
+            $wrapper->addChild($layout, $config->getWrapperCaptureTo());
+            $e->setModel($wrapper);
+        }
+
+        $this->setEnabled(false);
     }
 
     /**
@@ -258,9 +273,9 @@ class LayoutListener extends AbstractListenerAggregate
 
             list($action, $index) = $this->getPluginAction($metaItem);
 
-            $content    = isset($metaItem['content']) ? $metaItem['content'] : '';
+            $content    = isset($metaItem['content'])   ? $metaItem['content']   : '';
             $keyValue   = isset($metaItem['key_value']) ? $metaItem['key_value'] : '';
-            $keyType    = isset($metaItem['key_type']) ? $metaItem['key_type'] : 'name';
+            $keyType    = isset($metaItem['key_type'])  ? $metaItem['key_type']  : 'name';
             $modifiers  = isset($metaItem['modifiers']) ? $metaItem['modifiers'] : [];
 
             if ($action) {
@@ -332,9 +347,9 @@ class LayoutListener extends AbstractListenerAggregate
 
                 switch ($type) {
                     case 'stylesheet':
-                        $media      = isset($link['media']) ? $link['media'] : 'screen';
+                        $media      = isset($link['media'])     ? $link['media']     : 'screen';
                         $condition  = isset($link['condition']) ? $link['condition'] : '';
-                        $extras     = isset($link['extras']) ? $link['extras'] : [];
+                        $extras     = isset($link['extras'])    ? $link['extras']    : [];
 
                         if (null === $index) {
                             $plugin->$method($link['href'], $media, $condition, $extras);
@@ -345,7 +360,7 @@ class LayoutListener extends AbstractListenerAggregate
                         continue 2;
                         break;
                     case 'alternate':
-                        $title  = isset($link['title']) ? $link['title'] : null;
+                        $title  = isset($link['title'])  ? $link['title']  : null;
                         $extras = isset($link['extras']) ? $link['extras'] : [];
                         $type   = isset($extras['type']) ? $extras['type'] : null;
 
@@ -387,14 +402,13 @@ class LayoutListener extends AbstractListenerAggregate
         $assetPath  = $renderer->plugin('assetPath');
 
         foreach ($scripts as $script) {
-
             list($action, $index) = $this->getPluginAction($script);
 
-            $src        = isset($script['src']) ? $assetPath($script['src']) : null;
-            $content    = isset($script['content']) ? $script['content'] : null;
+            $src        = isset($script['src'])        ? $assetPath($script['src']) : null;
+            $content    = isset($script['content'])    ? $script['content']         : null;
+            $attributes = isset($script['attributes']) ? $script['attributes']      : [];
+            $type       = isset($script['type'])       ? $script['type']            : 'text/javascript';
             $mode       = $src ? HeadScript::FILE : HeadScript::SCRIPT;
-            $attributes = isset($script['attributes']) ? $script['attributes'] : [];
-            $type       = isset($script['type']) ? $script['type'] : 'text/javascript';
 
             if ($action) {
                 $method = $action . ucfirst(strtolower($mode));
@@ -456,7 +470,7 @@ class LayoutListener extends AbstractListenerAggregate
 
             list($action, $index) = $this->getPluginAction($style);
 
-            $content    = isset($style['content']) ? $style['content'] : null;
+            $content    = isset($style['content'])    ? $style['content']    : null;
             $attributes = isset($style['attributes']) ? $style['attributes'] : [];
 
             if ($action) {
