@@ -116,6 +116,15 @@ class LayoutListener extends AbstractListenerAggregate
             View::class,
             ViewEvent::EVENT_RENDERER_POST,
             function ($e) use ($config) {
+                $this->setNamespace($e, $config);
+            },
+            100
+        );
+
+        $e->getApplication()->getEventManager()->getSharedManager()->attach(
+            View::class,
+            ViewEvent::EVENT_RENDERER_POST,
+            function ($e) use ($config) {
                 $this->onViewRendererPost($e, $config);
             }
         );
@@ -137,9 +146,33 @@ class LayoutListener extends AbstractListenerAggregate
             View::class,
             ViewEvent::EVENT_RENDERER_POST,
             function ($e) use ($config) {
+                $this->setNamespace($e, $config);
+            },
+            100
+        );
+
+        $e->getApplication()->getEventManager()->getSharedManager()->attach(
+            View::class,
+            ViewEvent::EVENT_RENDERER_POST,
+            function ($e) use ($config) {
                 $this->onViewRendererPost($e, $config);
             }
         );
+    }
+
+    /**
+     * @param ViewEvent $e
+     * @param ModuleOptionsInterface $config
+     * @return void
+     */
+    protected function setNamespace(ViewEvent $e, ModuleOptionsInterface $config)
+    {
+        if ($e->getRenderer() instanceof PhpRenderer &&
+            ($namespace = $config->getNamespace())
+        ) {
+            $e->getModel()->setOption('namespace', $namespace)
+                ->setVariable('namespace', $namespace);
+        }
     }
 
     /**
@@ -153,14 +186,8 @@ class LayoutListener extends AbstractListenerAggregate
             return;
         }
 
-        $layout = $e->getModel();
-
-        if ($namespace = $config->getNamespace()) {
-            $layout->setOption('namespace', $namespace);
-        }
-
         if ($template = $config->getTemplate()) {
-            $layout->setTemplate($template);
+            $e->getModel()->setTemplate($template);
         }
 
         foreach ($config->toArray() as $name => $value) {
@@ -175,7 +202,7 @@ class LayoutListener extends AbstractListenerAggregate
         if ($config->getWrapper()) {
             $wrapper = new ViewModel();
             $wrapper->setTemplate($config->getWrapper());
-            $wrapper->addChild($layout, $config->getWrapperCaptureTo());
+            $wrapper->addChild($e->getModel(), $config->getWrapperCaptureTo());
             $e->setModel($wrapper);
         }
 
